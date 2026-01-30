@@ -45,7 +45,9 @@ fn get_api_key(provider: &str) -> Option<String> {
         "openai" => env::var("SMSH_OPENAI_API_KEY").or_else(|_| env::var("OPENAI_API_KEY")),
         "claude" => env::var("SMSH_ANTHROPIC_API_KEY").or_else(|_| env::var("ANTHROPIC_API_KEY")),
         _ => return None,
-    }.ok().filter(|k| !k.is_empty());
+    }
+    .ok()
+    .filter(|k| !k.is_empty());
     if env_key.is_some() {
         return env_key;
     }
@@ -69,7 +71,11 @@ fn log_entry(cmd: &str, query: &str, result: &str) {
     if let Some(path) = env::var("SMSH_LOG").ok().filter(|p| !p.is_empty()) {
         if let Ok(mut file) = OpenOptions::new().create(true).append(true).open(&path) {
             let ts = chrono::Local::now().format("%Y-%m-%d %H:%M:%S");
-            let _ = writeln!(file, "[{}] {} | query: {} | result: {}", ts, cmd, query, result);
+            let _ = writeln!(
+                file,
+                "[{}] {} | query: {} | result: {}",
+                ts, cmd, query, result
+            );
         }
     }
 }
@@ -108,11 +114,16 @@ fn llm_api_call(intro: &str, prompt: &str) -> Result<String, String> {
     });
 
     let mut idx = 0;
-    let mut tty = std::fs::OpenOptions::new().write(true).open("/dev/tty").ok();
+    let mut tty = std::fs::OpenOptions::new()
+        .write(true)
+        .open("/dev/tty")
+        .ok();
     loop {
         match rx.try_recv() {
             Ok(result) => {
-                if let Some(ref mut t) = tty { let _ = write!(t, "\r\x1b[K"); }
+                if let Some(ref mut t) = tty {
+                    let _ = write!(t, "\r\x1b[K");
+                }
                 return result;
             }
             Err(std::sync::mpsc::TryRecvError::Empty) => {
@@ -124,7 +135,9 @@ fn llm_api_call(intro: &str, prompt: &str) -> Result<String, String> {
                 idx += 1;
             }
             Err(std::sync::mpsc::TryRecvError::Disconnected) => {
-                if let Some(ref mut t) = tty { let _ = write!(t, "\r\x1b[K"); }
+                if let Some(ref mut t) = tty {
+                    let _ = write!(t, "\r\x1b[K");
+                }
                 return Err("Background thread failed".to_string());
             }
         }
@@ -152,8 +165,14 @@ fn openai_call(intro: &str, prompt: &str, schema: &serde_json::Value) -> Result<
         .send()
         .map_err(|e| format!("Request failed: {}", e))?;
 
-    let json: serde_json::Value = resp.json().map_err(|e| format!("Invalid response: {}", e))?;
-    if let Some(err) = json.get("error").and_then(|e| e.get("message")).and_then(|m| m.as_str()) {
+    let json: serde_json::Value = resp
+        .json()
+        .map_err(|e| format!("Invalid response: {}", e))?;
+    if let Some(err) = json
+        .get("error")
+        .and_then(|e| e.get("message"))
+        .and_then(|m| m.as_str())
+    {
         return Err(format!("API error: {}", err));
     }
     let content = json["choices"][0]["message"]["content"]
@@ -193,8 +212,14 @@ fn claude_call(intro: &str, prompt: &str, schema: &serde_json::Value) -> Result<
         .send()
         .map_err(|e| format!("Request failed: {}", e))?;
 
-    let json: serde_json::Value = resp.json().map_err(|e| format!("Invalid response: {}", e))?;
-    if let Some(err) = json.get("error").and_then(|e| e.get("message")).and_then(|m| m.as_str()) {
+    let json: serde_json::Value = resp
+        .json()
+        .map_err(|e| format!("Invalid response: {}", e))?;
+    if let Some(err) = json
+        .get("error")
+        .and_then(|e| e.get("message"))
+        .and_then(|m| m.as_str())
+    {
         return Err(format!("API error: {}", err));
     }
     let input = &json["content"][0]["input"];
@@ -213,12 +238,17 @@ fn main() {
 
     match cli.command {
         Commands::Complete { buffer, query } => {
-            let query = query.or_else(|| {
-                print!("> Query: ");
-                io::stdout().flush().unwrap();
-                let mut s = String::new();
-                io::stdin().read_line(&mut s).ok().map(|_| s.trim().to_string())
-            }).unwrap_or_default();
+            let query = query
+                .or_else(|| {
+                    print!("> Query: ");
+                    io::stdout().flush().unwrap();
+                    let mut s = String::new();
+                    io::stdin()
+                        .read_line(&mut s)
+                        .ok()
+                        .map(|_| s.trim().to_string())
+                })
+                .unwrap_or_default();
 
             if query.is_empty() {
                 println!("Completion aborted (empty input).");
@@ -230,7 +260,9 @@ fn main() {
                 If the request is unclear or not a valid shell task, set error=true and put an explanation in result. {}", os
             );
             let prompt = match &buffer {
-                Some(b) if !b.is_empty() => format!("Alter zsh command `{}` to comply with query `{}`", b, query),
+                Some(b) if !b.is_empty() => {
+                    format!("Alter zsh command `{}` to comply with query `{}`", b, query)
+                }
                 _ => query.clone(),
             };
 
@@ -244,7 +276,14 @@ fn main() {
                     log_entry("complete", &query, &text);
                     println!("{}", text);
                 }
-                Err(e) if e.starts_with("Request failed") || e.starts_with("API error") || e.starts_with("Invalid response") || e.starts_with("Missing") || e.starts_with("Failed to parse") || e.contains("API key") => {
+                Err(e)
+                    if e.starts_with("Request failed")
+                        || e.starts_with("API error")
+                        || e.starts_with("Invalid response")
+                        || e.starts_with("Missing")
+                        || e.starts_with("Failed to parse")
+                        || e.contains("API key") =>
+                {
                     log_entry("complete", &query, &format!("ERROR: {}", e));
                     println!("{}", e);
                     std::process::exit(1);
