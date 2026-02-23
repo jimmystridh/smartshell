@@ -60,8 +60,10 @@ fn get_api_key(provider: &str) -> Option<String> {
             "claude" => "smartshell.anthropic",
             _ => return None,
         };
-        if let Ok(entry) = keyring::Entry::new(service, &whoami::username()) {
-            return entry.get_password().ok();
+        if let Ok(username) = whoami::username() {
+            if let Ok(entry) = keyring::Entry::new(service, &username) {
+                return entry.get_password().ok();
+            }
         }
     }
     None
