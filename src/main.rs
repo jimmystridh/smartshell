@@ -55,13 +55,21 @@ fn get_api_key(provider: &str) -> Option<String> {
     // Fall back to macOS Keychain
     #[cfg(target_os = "macos")]
     {
+        use apple_native_keyring_store::keychain;
+        use keyring_core::Entry;
+
         let service = match provider {
             "openai" => "smartshell.openai",
             "claude" => "smartshell.anthropic",
             _ => return None,
         };
+        if keyring_core::get_default_store().is_none() {
+            if let Ok(store) = keychain::Store::new() {
+                keyring_core::set_default_store(store);
+            }
+        }
         if let Ok(username) = whoami::username() {
-            if let Ok(entry) = keyring::Entry::new(service, &username) {
+            if let Ok(entry) = Entry::new(service, &username) {
                 return entry.get_password().ok();
             }
         }
